@@ -24,7 +24,6 @@ def sizeof_fmt(num, suffix='B'):
             return "%3.1f%s%s" % (num, unit, suffix)
         num /= 1024.0
     return "%.1f%s%s" % (num, 'Yi', suffix)
-
 bandwithUsage = 0
 
 def crawler(domain, ofile, mute):
@@ -50,7 +49,6 @@ def crawler(domain, ofile, mute):
             processed_urls.add(url)
             # get url's content
             
-            
 
             try:
                 response = requests.head(url)
@@ -67,11 +65,10 @@ def crawler(domain, ofile, mute):
                     #print("Not html. Skipping")
                     continue
 
-
+            #download!
             actualPayload = bytearray()
-
             try:
-                print(str(len(new_urls))+" ",end='')
+                #print(str(len(new_urls))+" ",end='')
                 response = requests.get(url, stream=True)
                 total_length = response.headers.get('content-length')
                 dl = 0
@@ -92,52 +89,116 @@ def crawler(domain, ofile, mute):
                 # add broken urls to it's own set, then continue
                 broken_urls.add(url)
                 continue
-            
-            actualPayload = actualPayload.decode('utf-8')
+            try:
+            	actualPayload = actualPayload.decode('utf-8')
+            except UnicodeDecodeError as e:
+            	continue
+
 
             # extract base url to resolve relative links
+            '''
             parts = urlsplit(url)
             base = "{0.netloc}".format(parts)
             strip_base = base.replace("www.", "")
             base_url = "{0.scheme}://{0.netloc}".format(parts)
-            
             path = url[:url.rfind('/')+1] if '/' in parts.path else url
+            '''
 
             # create a beutiful soup for the html document
             #soup = BeautifulSoup(response.text, "lxml")
             soup = BeautifulSoup(actualPayload, "lxml")
             title = soup.find('title')
-            if title is not None:
-            	print(title.string)
-            print("%s" % url)
-            print()
+
+
+            input_base = urlparse(domain).netloc
+            base = urlparse(url).netloc
+            path = urlparse(url).path
+            path = path.split("/")
+            path = filter(lambda x:x!='',path)
+            path = list(path)
+            #print(path)
+
+            print(str(len(new_urls))+" "+url,end='\r')
+
+            dontprint = True
+            try:
+                if (path[0] == 'tag') or (path[0] == 'category') or (path[0] == 'author'):
+                    dontprint = True
+                elif len(path) == 2:
+                    if path[0].isnumeric() and path[1].isnumeric():
+                        dontprint = True
+                elif len(path) == 3:
+                    if path[0].isnumeric() and path[1].isnumeric() and path[2].isnumeric():
+                        dontprint = True
+                    elif path[0].isnumeric() and path[1].isnumeric() and path[2] == 'page':
+                        dontprint = True
+                else:
+                    dontprint = False
+            except IndexError as e:
+                dontprint = False
+
+            if not dontprint:
+                sys.stdout.write("\033[K") 
+                if title is not None:
+                	print(title.string)
+                print("%s" % url)
+                print()
+            else:
+                sys.stdout.write("\033[K")
+
+
+            
+
+
 
             for link in soup.find_all('a'):
-                # extract link url from the anchor
+
+
                 anchor = link.attrs["href"] if "href" in link.attrs else ''
 
-
+                
                 if anchor != '':
-                	#print(anchor)
                 	try:
                 		anchor = furl.furl(anchor).remove(args=True,fragment=True).url
                 	except ValueError as e:
                 		continue
 
-                
+                if anchor == '':
+                    continue
+
+                anchor_base = urlparse(anchor).netloc
+                if (anchor_base != input_base):
+                    #print("External : "+str(anchor))
+                    foreign_urls.add(anchor)
+                else:
+                    #print("Internal : "+str(anchor))
+                    local_urls.add(anchor)
+
+
+                '''
                 if not base_url in anchor:
                 	foreign_urls.add(anchor)
                 	continue
-                #print(anchor)
-
+                '''
                 
+
+                '''
                 path = urlparse(url).path
                 ext = splitext(path)[1]
                 #print(ext)
 
-                if anchor.startswith('/'):
+                #print(anchor)
+                #print("netloc:"+urlparse(anchor).netloc)
+
+                if anchor.startswith('/')  :
                     local_link = base_url + anchor
                     local_urls.add(local_link)
+                elif (urlparse(anchor).netloc == ''):
+                	local_link = base_url + "/" + anchor
+                	local_urls.add(local_link)
+                elif not base_url in anchor:
+                	foreign_urls.add(anchor)
+                	continue
                     #print("Case 1 : " + local_link)
                 elif strip_base in anchor:
                     local_urls.add(anchor)
@@ -149,6 +210,7 @@ def crawler(domain, ofile, mute):
                 else:
                     foreign_urls.add(anchor)
                     #print("Case 4 : " + anchor)
+                '''
 
 
 
@@ -161,144 +223,15 @@ def crawler(domain, ofile, mute):
         print("External URLs : ")
         for x in foreign_urls:
         	print(x)
+        print("Downloaded : "+sizeof_fmt(int(bandwithUsage)))
         sys.exit()
-        '''
-        if mute is False:
-            if ofile is not None:
-                return report_file(ofile, processed_urls, local_urls, foreign_urls, broken_urls)
-            else:
-                return report(processed_urls, local_urls, foreign_urls, broken_urls)
-        else:
-            if ofile is not None:
-                return mute_report_file(ofile, local_urls)
-            else:
-                return mute_report(local_urls)
-        '''
+ 
     
     except KeyboardInterrupt:
         sys.exit()
 
 
-def limit_crawler(domain, ofile, limit, mute):
-    try:
-        # a queue of urls to be crawled
-        new_urls = deque([domain])
-        # a set of urls that we have already crawled
-        processed_urls = set()
-        # a set of domains inside the target website
-        limit_urls = set()
-        # a set of domains outside the target website
-        limit_urls = set()
-        # a set of broken urls
-        broken_urls = set()
 
-        # process urls one by one until we exhaust the queue
-        while len(new_urls):
-
-            # move next url from the queue to the set of processed urls
-            url = new_urls.popleft()
-            processed_urls.add(url)
-            # get url's content
-            print("Processing %s" % url)
-            try:
-                response = requests.get(url)
-            except (requests.exceptions.MissingSchema, requests.exceptions.ConnectionError, requests.exceptions.InvalidURL, requests.exceptions.InvalidSchema):
-                # add broken urls to it's own set, then continue
-                broken_urls.add(url)
-                continue
-
-            # extract base url to resolve relative links
-            parts = urlsplit(url)
-            base = "{0.netloc}".format(parts)
-            strip_base = base.replace("www.", "")
-            base_url = "{0.scheme}://{0.netloc}".format(parts)
-            path = url[:url.rfind('/')+1] if '/' in parts.path else url
-
-            # create a beutiful soup for the html document
-            soup = BeautifulSoup(response.text, "lxml")
-
-            for link in soup.find_all('a'):
-                # extract link url from the anchor
-                anchor = link.attrs["href"] if "href" in link.attrs else ''
-                print(anchor)
-
-                if limit in anchor:
-                    limit_urls.add(anchor)
-                else:
-                    pass
-
-            for i in limit_urls:
-                if not i in new_urls and not i in processed_urls:
-                    new_urls.append(i)
-
-        print()
-        for x in foreign_urls:
-        	print(x)
-        '''
-        if mute is False:
-            if ofile is not None:
-                return limit_report_file(limit, ofile, processed_urls, limit_urls, broken_urls)
-            else:
-                return limit_report(limit, processed_urls, limit_urls, broken_urls)
-        else:
-            if ofile is not None:
-                return limit_mute_report_file(limit, ofile, limit_urls)
-            else:
-                return limit_mute_report(limit, limit_urls)
-         '''
-
-    except KeyboardInterrupt:
-        sys.exit()
-
-
-def limit_report_file(limit, ofile, processed_urls, limit_urls, broken_urls):
-    with open(ofile, 'w') as f:
-        print(
-            "--------------------------------------------------------------------", file=f)
-        print("All found URLs:", file=f)
-        for i in processed_urls:
-            print(i, file=f)
-        print(
-            "--------------------------------------------------------------------", file=f)
-        print("All " + limit + "URLs:", file=f)
-        for j in limit_urls:
-            print(j, file=f)
-        print(
-            "--------------------------------------------------------------------", file=f)
-        print("All broken URL's:", file=f)
-        for z in broken_urls:
-            print(z, file=f)
-
-
-def limit_report(limit, processed_urls, limit_urls, broken_urls):
-    print("--------------------------------------------------------------------")
-    print("All found URLs:")
-    for i in processed_urls:
-        print(i)
-    print("--------------------------------------------------------------------")
-    print("All " + limit + " URLs:")
-    for j in limit_urls:
-        print(j)
-    print("--------------------------------------------------------------------")
-    print("All broken URL's:")
-    for z in broken_urls:
-        print(z)
-
-
-def limit_mute_report_file(limit, ofile, limit_urls):
-    with open(ofile, 'w') as f:
-        print(
-            "--------------------------------------------------------------------", file=f)
-        print("All " + limit + " URLs:", file=f)
-        for j in limit_urls:
-            print(j, file=f)
-
-
-def limit_mute_report(limit, limit_urls):
-    print("--------------------------------------------------------------------")
-    print("All " + limit + "URLs:")
-    for i in limit_urls:
-        print(i)
 
 def report_file(ofile, processed_urls, local_urls, foreign_urls, broken_urls):
     with open(ofile, 'w') as f:
@@ -323,39 +256,6 @@ def report_file(ofile, processed_urls, local_urls, foreign_urls, broken_urls):
             print(z, file=f)
 
 
-def report(processed_urls, local_urls, foreign_urls, broken_urls):
-    print("--------------------------------------------------------------------")
-    print("All found URLs:")
-    for i in processed_urls:
-        print(i)
-    print("--------------------------------------------------------------------")
-    print("All local URLs:")
-    for j in local_urls:
-        print(j)
-    print("--------------------------------------------------------------------")
-    print("All foreign URLs:")
-    for x in foreign_urls:
-        print(x)
-    print("--------------------------------------------------------------------")
-    print("All broken URL's:")
-    for z in broken_urls:
-        print(z)
-
-
-def mute_report_file(ofile, local_urls):
-    with open(ofile, 'w') as f:
-        print(
-            "--------------------------------------------------------------------", file=f)
-        print("All local URLs:", file=f)
-        for j in local_urls:
-            print(j, file=f)
-
-
-def mute_report(local_urls):
-    print("--------------------------------------------------------------------")
-    print("All local URLs:")
-    for i in local_urls:
-        print(i)
 
 
 def main(argv):
@@ -382,21 +282,13 @@ def main(argv):
     mute = args.mute
     if domain:
         print("domain:", domain)
-    if ofile:
-        print("output file:", ofile)
-    if limit:
-        print("limit:", limit)
-    if mute:
-        print("mute:", mute)
 
-    if limit is None:
-        print()
-        crawler(domain, ofile, mute)
-        print()
-    else:
-        print()
-        limit_crawler(domain, ofile, limit, mute)
-        print()
+    print()
+    crawler(domain, ofile, mute)
+
+
+
+
 
 
 def signal_handler(sig,frame):
