@@ -9,7 +9,7 @@ Web spider.
 ### v21.3.17
 Optimized for wordpress/blogger blog.
 Supports pausing when crawling big site. 
-1. 'python3 ara.py -d https://target.url`
+1. `python3 ara.py -d https://target.url`
 2. Press ctrl+c to pause. `last_crawl` file will be generated
 3. To continue crawling : `python3 ara.py -d https://target.url -c`
 
