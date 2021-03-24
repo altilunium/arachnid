@@ -121,6 +121,11 @@ def crawler(domain, ofile, mute, cont):
                         dontprint = True
                     else:
                     	dontprint = False
+                elif len(path) == 5:
+                    if path[0].isnumeric() and path[1].isnumeric() and path[2].isnumeric() and not path[3].isnumeric() and path[4] != '':
+                        dontprint = True
+                    else:
+                        dontprint = False
                 else:
                     dontprint = False
             except IndexError as e:
@@ -193,14 +198,31 @@ def crawler(domain, ofile, mute, cont):
             for i in local_urls:
                 if not i in new_urls and not i in processed_urls:
                     #print("Add : "+i)
-                    new_urls.append(i)
+                    if "https://" in i:
+                        nya = i.replace("https://","http://")
+                        if nya not in new_urls:
+                            new_urls.append(i)
+                        else:
+                            continue
+                    elif "http://" in i:
+                        nya = i.replace("http://","https://")
+                        if nya not in new_urls:
+                            new_urls.append(i)
+                    else:
+                        new_urls.append(i)
 
 
         print()
         
         print("External URLs : ")
+
+        fu_list = []
         for x in foreign_urls:
-        	print(x)
+        	#print(x)
+            fu_list.append(x)
+        fu_list.sort()
+        for x in fu_list:
+            print(x)
         #print("Downloaded : "+sizeof_fmt(int(bandwithUsage)))
         
         sys.exit()
@@ -290,6 +312,13 @@ def signal_handler(sig,frame):
         pickle.dump(processed_urls,f)
         pickle.dump(local_urls,f)
         pickle.dump(url,f)
+
+    print("External URLs : ")
+    for x in foreign_urls:
+        print(x)
+    print("Captured URL : ")
+    for x in new_urls:
+        print(x)
 
     sys.exit(0)
 
